@@ -15,17 +15,19 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeManager;
 
 import javax.annotation.Nonnull;
+import java.util.function.Supplier;
 
 @mezz.jei.api.JeiPlugin
 public class JeiPlugin implements IModPlugin
 {
-    private static final ResourceLocation pluginId = new ResourceLocation(JEArchaeology.MODID, JEArchaeology.MODID);
+    private static final ResourceLocation pluginId = ResourceLocation.fromNamespaceAndPath(JEArchaeology.MODID, JEArchaeology.MODID);
 
-    public static RecipeType<SniffRecipe> SNIFF_RECIPE_TYPE = RecipeType.create(JEArchaeology.MODID, "sniff", SniffRecipe.class);
-    public static RecipeType<BrushingRecipe> BRUSH_RECIPE_TYPE = RecipeType.create(JEArchaeology.MODID, "brush", BrushingRecipe.class);
+    public static Supplier<RecipeType<RecipeHolder<SniffRecipe>>> SNIFF_RECIPE_TYPE = RecipeType.createFromDeferredVanilla(JEArchaeology.SNIFF_TYPE);
+    public static Supplier<RecipeType<RecipeHolder<BrushingRecipe>>> BRUSH_RECIPE_TYPE = RecipeType.createFromDeferredVanilla(JEArchaeology.BRUSH_TYPE);
 
     public JeiPlugin() {
     }
@@ -38,9 +40,9 @@ public class JeiPlugin implements IModPlugin
 
     @Override
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
-        registration.addRecipeCatalyst(new ItemStack(Items.SNIFFER_EGG), SNIFF_RECIPE_TYPE);
-        registration.addRecipeCatalyst(new ItemStack(Items.BRUSH), BRUSH_RECIPE_TYPE);
-        CompatHandler.addRecipeCatalyst(registration, BRUSH_RECIPE_TYPE);
+        registration.addRecipeCatalyst(new ItemStack(Items.SNIFFER_EGG), SNIFF_RECIPE_TYPE.get());
+        registration.addRecipeCatalyst(new ItemStack(Items.BRUSH), BRUSH_RECIPE_TYPE.get());
+        CompatHandler.addRecipeCatalyst(registration, BRUSH_RECIPE_TYPE.get());
     }
 
     @Override
@@ -56,7 +58,7 @@ public class JeiPlugin implements IModPlugin
     public void registerRecipes(IRecipeRegistration registration) {
         RecipeManager recipeManager = Minecraft.getInstance().level.getRecipeManager();
 
-        registration.addRecipes(SNIFF_RECIPE_TYPE, SniffRecipeCategory.getAllRecipes(null));
-        registration.addRecipes(BRUSH_RECIPE_TYPE, BrushRecipeCategory.getAllRecipes(null));
+        registration.addRecipes(SNIFF_RECIPE_TYPE.get(), recipeManager.getAllRecipesFor(JEArchaeology.SNIFF_TYPE.get()));
+        registration.addRecipes(BRUSH_RECIPE_TYPE.get(), recipeManager.getAllRecipesFor(JEArchaeology.BRUSH_TYPE.get()));
     }
 }

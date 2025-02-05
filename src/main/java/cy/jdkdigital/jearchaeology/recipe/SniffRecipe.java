@@ -1,41 +1,42 @@
 package cy.jdkdigital.jearchaeology.recipe;
 
 import com.google.gson.JsonObject;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import cy.jdkdigital.jearchaeology.JEArchaeology;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.GsonHelper;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.item.crafting.Recipe;
-import net.minecraft.world.item.crafting.RecipeSerializer;
-import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.item.crafting.*;
 import net.minecraft.world.level.Level;
 
 import javax.annotation.Nonnull;
 
-public class SniffRecipe implements Recipe<Container>
+public class SniffRecipe implements Recipe<RecipeInput>
 {
-    private final ResourceLocation id;
     public final Ingredient item;
-    public final double chance;
+    public final float chance;
 
-    public SniffRecipe(ResourceLocation id, Ingredient item, double chance) {
-        this.id = id;
+    public SniffRecipe(Ingredient item, float chance) {
         this.item = item;
         this.chance = chance;
     }
 
     @Override
-    public boolean matches(Container inv, Level levelIn) {
+    public boolean matches(RecipeInput inv, Level levelIn) {
         return false;
     }
 
     @Nonnull
     @Override
-    public ItemStack assemble(Container inv, RegistryAccess registryAccess) {
+    public ItemStack assemble(RecipeInput inv, HolderLookup.Provider provider) {
         return ItemStack.EMPTY;
     }
 
@@ -46,14 +47,8 @@ public class SniffRecipe implements Recipe<Container>
 
     @Nonnull
     @Override
-    public ItemStack getResultItem(RegistryAccess registryAccess) {
+    public ItemStack getResultItem(HolderLookup.Provider provider) {
         return ItemStack.EMPTY;
-    }
-
-    @Nonnull
-    @Override
-    public ResourceLocation getId() {
-        return this.id;
     }
 
     @Nonnull
@@ -68,46 +63,47 @@ public class SniffRecipe implements Recipe<Container>
         return JEArchaeology.SNIFF_TYPE.get();
     }
 
-    public static class Serializer<T extends SniffRecipe> implements RecipeSerializer<T>
+    public static class Serializer implements RecipeSerializer<SniffRecipe>
     {
-        final SniffRecipe.Serializer.IRecipeFactory<T> factory;
+        private static final MapCodec<SniffRecipe> CODEC = RecordCodecBuilder.mapCodec(
+                builder -> builder.group(
+                                Ingredient.CODEC.fieldOf("item").forGetter(recipe -> recipe.item),
+                                Codec.FLOAT.fieldOf("chance").orElse(0.05f).forGetter(recipe -> recipe.chance)
+                        )
+                        .apply(builder, SniffRecipe::new)
+        );
 
-        public Serializer(SniffRecipe.Serializer.IRecipeFactory<T> factory) {
-            this.factory = factory;
-        }
+        public static final StreamCodec<RegistryFriendlyByteBuf, SniffRecipe> STREAM_CODEC = StreamCodec.of(
+                SniffRecipe.Serializer::toNetwork, SniffRecipe.Serializer::fromNetwork
+        );
 
-        @Nonnull
         @Override
-        public T fromJson(ResourceLocation id, JsonObject json) {
-            Ingredient item = Ingredient.fromJson(json.get("item"));
-
-            double chance = GsonHelper.getAsDouble(json, "chance", 0.05D);
-
-            return this.factory.create(id, item, chance);
+        public MapCodec<SniffRecipe> codec() {
+            return CODEC;
         }
 
-        public T fromNetwork(@Nonnull ResourceLocation id, @Nonnull FriendlyByteBuf buffer) {
+        @Override
+        public StreamCodec<RegistryFriendlyByteBuf, SniffRecipe> streamCodec() {
+            return STREAM_CODEC;
+        }
+
+        public static SniffRecipe fromNetwork(@Nonnull RegistryFriendlyByteBuf buffer) {
             try {
-                return this.factory.create(id, Ingredient.fromNetwork(buffer), buffer.readDouble());
+                return new SniffRecipe(Ingredient.CONTENTS_STREAM_CODEC.decode(buffer), buffer.readFloat());
             } catch (Exception e) {
-                JEArchaeology.LOGGER.error("Error reading sniff recipe from packet. " + id, e);
+                JEArchaeology.LOGGER.error("Error reading sniff recipe from packet.", e);
                 throw e;
             }
         }
 
-        public void toNetwork(@Nonnull FriendlyByteBuf buffer, T recipe) {
+        public static void toNetwork(@Nonnull RegistryFriendlyByteBuf buffer, SniffRecipe recipe) {
             try {
-                recipe.item.toNetwork(buffer);
-                buffer.writeDouble(recipe.chance);
+                Ingredient.CONTENTS_STREAM_CODEC.encode(buffer, recipe.item);
+                buffer.writeFloat(recipe.chance);
             } catch (Exception e) {
-                JEArchaeology.LOGGER.error("Error writing sniff recipe to packet. " + recipe.getId(), e);
+                JEArchaeology.LOGGER.error("Error writing sniff recipe to packet.", e);
                 throw e;
             }
-        }
-
-        public interface IRecipeFactory<T extends SniffRecipe>
-        {
-            T create(ResourceLocation id, Ingredient item, double chance);
         }
     }
 }

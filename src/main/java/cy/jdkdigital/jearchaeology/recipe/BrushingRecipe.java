@@ -1,43 +1,38 @@
 package cy.jdkdigital.jearchaeology.recipe;
 
-import com.google.gson.JsonObject;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import cy.jdkdigital.jearchaeology.JEArchaeology;
-import net.minecraft.core.RegistryAccess;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.GsonHelper;
-import net.minecraft.world.Container;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.item.crafting.Recipe;
-import net.minecraft.world.item.crafting.RecipeSerializer;
-import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.item.crafting.*;
 import net.minecraft.world.level.Level;
 
 import javax.annotation.Nonnull;
 
-public class BrushingRecipe implements Recipe<Container>
+public class BrushingRecipe implements Recipe<RecipeInput>
 {
-    private final ResourceLocation id;
     public final Ingredient item;
-    public final double chance;
+    public final float chance;
     public final Ingredient brushableBlock;
 
-    public BrushingRecipe(ResourceLocation id, Ingredient item, double chance, Ingredient brushableBlock) {
-        this.id = id;
+    public BrushingRecipe(Ingredient item, float chance, Ingredient brushableBlock) {
         this.item = item;
         this.chance = chance;
         this.brushableBlock = brushableBlock;
     }
 
     @Override
-    public boolean matches(Container inv, Level levelIn) {
+    public boolean matches(RecipeInput inv, Level levelIn) {
         return false;
     }
 
     @Nonnull
     @Override
-    public ItemStack assemble(Container inv, RegistryAccess registryAccess) {
+    public ItemStack assemble(RecipeInput inv, HolderLookup.Provider provider) {
         return ItemStack.EMPTY;
     }
 
@@ -48,14 +43,8 @@ public class BrushingRecipe implements Recipe<Container>
 
     @Nonnull
     @Override
-    public ItemStack getResultItem(RegistryAccess registryAccess) {
+    public ItemStack getResultItem(HolderLookup.Provider provider) {
         return ItemStack.EMPTY;
-    }
-
-    @Nonnull
-    @Override
-    public ResourceLocation getId() {
-        return this.id;
     }
 
     @Nonnull
@@ -70,47 +59,49 @@ public class BrushingRecipe implements Recipe<Container>
         return JEArchaeology.BRUSH_TYPE.get();
     }
 
-    public static class Serializer<T extends BrushingRecipe> implements RecipeSerializer<T>
+    public static class Serializer implements RecipeSerializer<BrushingRecipe>
     {
-        final BrushingRecipe.Serializer.IRecipeFactory<T> factory;
+        private static final MapCodec<BrushingRecipe> CODEC = RecordCodecBuilder.mapCodec(
+                builder -> builder.group(
+                                Ingredient.CODEC.fieldOf("item").forGetter(recipe -> recipe.item),
+                                Codec.FLOAT.fieldOf("chance").orElse(0.05f).forGetter(recipe -> recipe.chance),
+                                Ingredient.CODEC.fieldOf("brushableBlock").forGetter(recipe -> recipe.brushableBlock)
+                        )
+                        .apply(builder, BrushingRecipe::new)
+        );
 
-        public Serializer(BrushingRecipe.Serializer.IRecipeFactory<T> factory) {
-            this.factory = factory;
-        }
+        public static final StreamCodec<RegistryFriendlyByteBuf, BrushingRecipe> STREAM_CODEC = StreamCodec.of(
+                BrushingRecipe.Serializer::toNetwork, BrushingRecipe.Serializer::fromNetwork
+        );
 
-        @Nonnull
         @Override
-        public T fromJson(ResourceLocation id, JsonObject json) {
-            Ingredient item = Ingredient.fromJson(json.get("item"));
-
-            double chance = GsonHelper.getAsDouble(json, "chance", 0.05D);
-
-            return this.factory.create(id, item, chance, Ingredient.of());
+        public MapCodec<BrushingRecipe> codec() {
+            return CODEC;
         }
 
-        public T fromNetwork(@Nonnull ResourceLocation id, @Nonnull FriendlyByteBuf buffer) {
+        @Override
+        public StreamCodec<RegistryFriendlyByteBuf, BrushingRecipe> streamCodec() {
+            return STREAM_CODEC;
+        }
+
+        public static BrushingRecipe fromNetwork(@Nonnull RegistryFriendlyByteBuf buffer) {
             try {
-                return this.factory.create(id, Ingredient.fromNetwork(buffer), buffer.readDouble(), Ingredient.fromNetwork(buffer));
+                return new BrushingRecipe(Ingredient.CONTENTS_STREAM_CODEC.decode(buffer), buffer.readFloat(), Ingredient.CONTENTS_STREAM_CODEC.decode(buffer));
             } catch (Exception e) {
-                JEArchaeology.LOGGER.error("Error reading brush recipe from packet. " + id, e);
+                JEArchaeology.LOGGER.error("Error reading brush recipe from packet.", e);
                 throw e;
             }
         }
 
-        public void toNetwork(@Nonnull FriendlyByteBuf buffer, T recipe) {
+        public static void toNetwork(@Nonnull RegistryFriendlyByteBuf buffer, BrushingRecipe recipe) {
             try {
-                recipe.item.toNetwork(buffer);
-                buffer.writeDouble(recipe.chance);
-                recipe.brushableBlock.toNetwork(buffer);
+                Ingredient.CONTENTS_STREAM_CODEC.encode(buffer, recipe.item);
+                buffer.writeFloat(recipe.chance);
+                Ingredient.CONTENTS_STREAM_CODEC.encode(buffer, recipe.brushableBlock);
             } catch (Exception e) {
-                JEArchaeology.LOGGER.error("Error writing brush recipe to packet. " + recipe.getId(), e);
+                JEArchaeology.LOGGER.error("Error writing brush recipe to packet.", e);
                 throw e;
             }
-        }
-
-        public interface IRecipeFactory<T extends BrushingRecipe>
-        {
-            T create(ResourceLocation id, Ingredient item, double chance, Ingredient brushableBlock);
         }
     }
 }

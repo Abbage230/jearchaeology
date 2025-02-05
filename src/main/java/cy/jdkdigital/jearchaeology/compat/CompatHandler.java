@@ -5,16 +5,18 @@ import cy.jdkdigital.jearchaeology.Config;
 import cy.jdkdigital.jearchaeology.jei.JeiPlugin;
 import mezz.jei.api.recipe.RecipeType;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraftforge.fml.ModList;
+import net.minecraft.world.level.storage.loot.LootTable;
+import net.neoforged.fml.ModList;
 
 import java.util.Map;
 
 public class CompatHandler
 {
-    public static Map<ResourceLocation, Pair<String, Ingredient>> getTables() {
-        Map<ResourceLocation, Pair<String, Ingredient>> tables = MinecraftCompat.getTables();
+    public static Map<ResourceKey<LootTable>, Pair<String, Ingredient>> getTables() {
+        Map<ResourceKey<LootTable>, Pair<String, Ingredient>> tables = MinecraftCompat.getTables();
         if (ModList.get().isLoaded("allthemodium") && Config.atm_compat) {
             tables.putAll(ATMCompat.getTables());
         }

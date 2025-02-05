@@ -11,26 +11,16 @@ import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.RecipeType;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.level.storage.loot.BuiltInLootTables;
-import net.minecraft.world.level.storage.loot.LootParams;
-import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
-import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.*;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class SniffRecipeCategory implements IRecipeCategory<SniffRecipe>
+public class SniffRecipeCategory implements IRecipeCategory<RecipeHolder<SniffRecipe>>
 {
-    private static List<SniffRecipe> cachedRecipes = new ArrayList<>();
     private final IDrawable background;
     private final IDrawable icon;
 
@@ -39,31 +29,9 @@ public class SniffRecipeCategory implements IRecipeCategory<SniffRecipe>
         this.icon = guiHelper.createDrawableIngredient(VanillaTypes.ITEM_STACK, new ItemStack(Items.SNIFFER_EGG));
     }
 
-    public static List<SniffRecipe> getAllRecipes(ServerLevel level) {
-        if (level != null && cachedRecipes.isEmpty()) {
-            var sniffer = EntityType.SNIFFER.create(level);
-            LootParams lootparams = (new LootParams.Builder(level)).withParameter(LootContextParams.ORIGIN, new Vec3(0, 0, 0)).withParameter(LootContextParams.THIS_ENTITY, sniffer).create(LootContextParamSets.GIFT);
-            Map<Item, ItemStack> items = new HashMap<>();
-            var table = level.getServer().getLootData().getLootTable(BuiltInLootTables.SNIFFER_DIGGING);
-            for (int i = 0; i < 200; i++) {
-                table.getRandomItems(lootparams).forEach(itemStack -> {
-                    if (!items.containsKey(itemStack.getItem())) {
-                        items.put(itemStack.getItem(), itemStack);
-                    }
-                });
-            }
-            setRecipes(List.of(new SniffRecipe(new ResourceLocation(JEArchaeology.MODID, "sniffing"), Ingredient.of(items.values().toArray(new ItemStack[0])), 1D)));
-        }
-        return cachedRecipes;
-    }
-
-    public static void setRecipes(List<SniffRecipe> data) {
-        cachedRecipes = data;
-    }
-
     @Override
-    public @NotNull RecipeType<SniffRecipe> getRecipeType() {
-        return JeiPlugin.SNIFF_RECIPE_TYPE;
+    public @NotNull RecipeType<RecipeHolder<SniffRecipe>> getRecipeType() {
+        return JeiPlugin.SNIFF_RECIPE_TYPE.get();
     }
 
     @Override
@@ -82,9 +50,9 @@ public class SniffRecipeCategory implements IRecipeCategory<SniffRecipe>
     }
 
     @Override
-    public void setRecipe(IRecipeLayoutBuilder builder, SniffRecipe recipe, @NotNull IFocusGroup iFocusGroup) {
+    public void setRecipe(IRecipeLayoutBuilder builder, RecipeHolder<SniffRecipe> recipe, @NotNull IFocusGroup iFocusGroup) {
         AtomicInteger i = new AtomicInteger();
-        Arrays.stream(recipe.item.getItems()).forEach(itemStack -> {
+        Arrays.stream(recipe.value().item.getItems()).forEach(itemStack -> {
             int row = (int)Math.floor(i.get() /7f);
             builder.addSlot(RecipeIngredientRole.OUTPUT, (i.get() - (row*7)) * 18, row * 18)
                     .addItemStack(itemStack)
